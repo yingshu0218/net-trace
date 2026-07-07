@@ -1,0 +1,26 @@
+Metadata-Version: 2.4
+Name: netest
+Version: 0.1.0
+Summary: macOS 网络诊断工具 - 网速测试、WiFi 质量检测、路由追踪
+Author: netest
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: End Users/Desktop
+Classifier: Topic :: System :: Networking
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Operating System :: MacOS :: MacOS X
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: click>=8.1.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: speedtest-cli>=2.1.3
+Provides-Extra: wifi
+Requires-Dist: pyobjc-framework-CoreWLAN>=11.0; extra == "wifi"
+Provides-Extra: full
+Requires-Dist: pyobjc-framework-CoreWLAN>=11.0; extra == "full"

@@ -351,6 +351,9 @@ function renderStepDetail(stepId, data) {
     });
   } else if (stepId === 'traceroute') {
     html += kv('追踪目标', data.target);
+    if (data.method === 'ping-ttl') {
+      html += kv('探测方式', tag('ping TTL 逐跳', 'cloud'));
+    }
     if (data.error) {
       html += kv('', tag(data.error, 'tunnel'));
       if (data.route_fallback) {

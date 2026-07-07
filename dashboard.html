@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>netest · 网络质量检测仪表盘</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --bg-card: #1a1f2e;
+    --bg-card-hover: #1e2435;
+    --border: #2a3040;
+    --text: #e0e6f0;
+    --text-secondary: #8899aa;
+    --text-muted: #5a6a7a;
+    --accent: #4dabf7;
+    --accent-dim: #2d6ea6;
+    --green: #4cd964;
+    --yellow: #ffcc00;
+    --red: #ff3b30;
+    --orange: #ff9500;
+    --purple: #af52de;
+    --pink: #ff2d55;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .app-header {
+    background: linear-gradient(135deg, rgba(77, 171, 247, 0.08), rgba(175, 82, 222, 0.06));
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+  }
+
+  .app-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .app-header h1 .icon { font-size: 24px; }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.offline { background: var(--red); }
+  .status-dot.loading { background: var(--yellow); animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .btn-refresh {
+    background: var(--accent-dim);
+    border: none;
+    color: white;
+    padding: 6px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+  }
+  .btn-refresh:hover { background: var(--accent); }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+  }
+
+  /* ── 概览卡片 ── */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .overview-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+  .overview-card:hover { border-color: var(--accent-dim); }
+  .overview-card .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .overview-card .value {
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .overview-card .value.green { color: var(--green); }
+  .overview-card .value.blue { color: var(--accent); }
+  .overview-card .value.orange { color: var(--orange); }
+  .overview-card .value.purple { color: var(--purple); }
+  .overview-card .value.red { color: var(--red); }
+
+  /* ── 面板 ── */
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-header .badge {
+    font-size: 11px;
+    background: var(--accent-dim);
+    padding: 2px 10px;
+    border-radius: 20px;
+    color: white;
+  }
+
+  .panel-body { padding: 16px 20px; }
+
+  /* ── 网络接口表格 ── */
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(42, 48, 64, 0.5);
+    color: var(--text-secondary);
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(77, 171, 247, 0.03); }
+
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .tag.active { background: rgba(76, 217, 100, 0.15); color: var(--green); }
+  .tag.inactive { background: rgba(90, 106, 122, 0.15); color: var(--text-muted); }
+
+  /* ── WiFi 详情 ── */
+  .wifi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .wifi-item {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .wifi-item .label { color: var(--text-muted); font-size: 11px; }
+  .wifi-item .value { font-size: 15px; font-weight: 600; margin-top: 4px; }
+
+  .rssi-bar-wrap {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .rssi-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s;
+  }
+  .rssi-bar.excellent { background: var(--green); }
+  .rssi-bar.good { background: var(--accent); }
+  .rssi-bar.fair { background: var(--yellow); }
+  .rssi-bar.poor { background: var(--orange); }
+  .rssi-bar.bad { background: var(--red); }
+
+  /* ── 双栏布局 ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 900px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  /* ── DNS / Proxy / Firewall 对象 ── */
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(42, 48, 64, 0.3);
+    font-size: 13px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .key { color: var(--text-muted); }
+  .info-row .val { font-weight: 500; }
+  .info-row .val.enabled { color: var(--green); }
+  .info-row .val.disabled { color: var(--text-muted); }
+
+  .chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    font-size: 12px;
+    padding: 4px 12px;
+    background: rgba(77, 171, 247, 0.1);
+    border: 1px solid rgba(77, 171, 247, 0.2);
+    border-radius: 20px;
+    color: var(--accent);
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
+
+  /* ── 路由表 ── */
+  .route-entry {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    gap: 12px;
+  }
+  .route-dest { color: var(--accent); min-width: 120px; }
+  .route-gw { color: var(--text-secondary); min-width: 130px; }
+  .route-flags { color: var(--text-muted); font-size: 10px; }
+  .route-iface { color: var(--purple); }
+
+  /* ── 已知 WiFi 列表 ── */
+  .wifi-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .wifi-chip {
+    font-size: 12px;
+    padding: 6px 14px;
+    background: var(--bg-card-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .wifi-chip .sec { font-size: 10px; color: var(--text-muted); }
+
+  /* ── 连接统计 ── */
+  .conn-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .conn-stat {
+    text-align: center;
+    padding: 10px 20px;
+    background: var(--bg-card-hover);
+    border-radius: var(--radius-sm);
+  }
+  .conn-stat .num { font-size: 20px; font-weight: 700; }
+  .conn-stat .lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── 空状态 ── */
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* ── 错误提示 ── */
+  .error-toast {
+    background: rgba(255, 59, 48, 0.1);
+    border: 1px solid rgba(255, 59, 48, 0.3);
+    color: var(--red);
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  /* ── 加载动画 ── */
+  .loading-overlay {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-muted);
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── footer ── */
+  .app-footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>
+    <span class="icon">📡</span> netest 网络质量检测
+  </h1>
+  <div class="status-bar">
+    <span><span class="status-dot loading" id="statusDot"></span> <span id="statusText">检测中...</span></span>
+    <span id="lastUpdate"></span>
+    <button class="btn-refresh" onclick="refresh()">⟳ 重新检测</button>
+  </div>
+</div>
+
+<div class="container" id="app">
+  <div class="loading-overlay">
+    <div class="spinner"></div>
+    <div>正在采集网络数据...</div>
+  </div>
+</div>
+
+<div class="app-footer">
+  netest v0.1.0 — macOS 网络质量检测仪表盘
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════════════
+
+function rssiQuality(rssi) {
+  if (rssi >= -50) return { text: '优秀', cls: 'excellent', pct: 100 };
+  if (rssi >= -60) return { text: '良好', cls: 'good', pct: 80 };
+  if (rssi >= -70) return { text: '一般', cls: 'fair', pct: 50 };
+  if (rssi >= -80) return { text: '较弱', cls: 'poor', pct: 25 };
+  return { text: '极弱', cls: 'bad', pct: 10 };
+}
+
+function rssiPercentage(rssi) {
+  // -30 = 100%, -90 = 0%
+  return Math.max(0, Math.min(100, Math.round((rssi + 90) / 60 * 100)));
+}
+
+function formatSpeed(mbps) {
+  if (mbps >= 1000) return (mbps / 1000).toFixed(1) + ' Gbps';
+  return mbps.toFixed(1) + ' Mbps';
+}
+
+function latencyColor(ms) {
+  if (ms < 10) return 'green';
+  if (ms < 50) return 'blue';
+  if (ms < 100) return 'orange';
+  return 'red';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ═══════════════════════════════════════════════
+// 渲染
+// ═══════════════════════════════════════════════
+
+function renderApp(data) {
+  const app = document.getElementById('app');
+
+  let errorsHtml = '';
+  if (data.errors && data.errors.length) {
+    errorsHtml = `<div class="error-toast">⚠️ 采集错误: ${data.errors.map(escapeHtml).join(', ')}</div>`;
+  }
+
+  app.innerHTML = `
+    ${errorsHtml}
+
+    <!-- 概览卡片 -->
+    <div class="overview-grid">
+      <div class="overview-card">
+        <div class="label">🌐 互联网状态</div>
+        <div class="value ${data.internet_connected ? 'green' : 'red'}">${data.internet_connected ? '已连接' : '断连'}</div>
+      </div>
+      <div class="overview-card">
+        <div class="label">⚡ 网络延迟</div>
+        <div class="value ${latencyColor(data.internet_latency)}">${data.internet_latency} ms</div>
+      </div>
+      <div class="overview-card">
+        <div class="label">🌍 公网 IP</div>
+        <div class="value blue">${data.public_ip || 'N/A'}</div>
+      </div>
+      <div class="overview-card">
+        <div class="label">💻 主机名</div>
+        <div class="value" style="font-size:16px;">${escapeHtml(data.hostname)}</div>
+      </div>
+      <div class="overview-card">
+        <div class="label">🔌 活跃接口</div>
+        <div class="value orange">${data.interfaces.filter(i => i.status === 'active').length}</div>
+      </div>
+      <div class="overview-card">
+        <div class="label">🔗 活跃连接</div>
+        <div class="value purple">${data.net_summary?.total_active || 0}</div>
+      </div>
+    </div>
+
+    <!-- 当前连接 -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>📶 当前连接</h2>
+        <span class="badge">${data.wifi?.is_connected ? 'WiFi' : (data.primary_interface || 'N/A')}</span>
+      </div>
+      <div class="panel-body">
+        ${renderWiFiSection(data.wifi)}
+        ${renderPrimaryRoute(data.routing)}
+      </div>
+    </div>
+
+    <!-- 网络接口 -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>🖧 网络接口</h2>
+        <span class="badge">${data.interfaces.length} 个</span>
+      </div>
+      <div class="panel-body">
+        ${renderInterfacesTable(data.interfaces, data.primary_interface)}
+      </div>
+    </div>
+
+    <!-- DNS + 代理 双栏 -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>🔍 DNS 配置</h2>
+          <span class="badge">${data.dns?.servers?.length || 0} 服务器</span>
+        </div>
+        <div class="panel-body">${renderDnsSection(data.dns)}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>🔄 代理设置</h2>
+          <span class="badge">${hasProxy(data.proxy) ? '已启用' : '未启用'}</span>
+        </div>
+        <div class="panel-body">${renderProxySection(data.proxy)}</div>
+      </div>
+    </div>
+
+    <!-- 防火墙 + 路由 双栏 -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>🛡️ 防火墙</h2>
+          <span class="badge">${data.firewall?.enabled ? '已启用' : '未启用'}</span>
+        </div>
+        <div class="panel-body">${renderFirewallSection(data.firewall)}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>📋 路由表</h2>
+          <span class="badge">${data.routing?.route_count || 0} 条</span>
+        </div>
+        <div class="panel-body">${renderRouteSection(data.routing)}</div>
+      </div>
+    </div>
+
+    <!-- 已保存 WiFi + VPN -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>📝 已保存 WiFi</h2>
+          <span class="badge">${data.saved_wifi_networks?.length || 0} 个</span>
+        </div>
+        <div class="panel-body">${renderSavedWiFi(data.saved_wifi_networks)}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>🔐 VPN 配置</h2>
+          <span class="badge">${data.vpn_configs?.length || 0} 个</span>
+        </div>
+        <div class="panel-body">${renderVpnSection(data.vpn_configs)}</div>
+      </div>
+    </div>
+
+    <!-- 网络连接统计 -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>📊 网络连接统计</h2>
+      </div>
+      <div class="panel-body">${renderConnectionStats(data.net_summary)}</div>
+    </div>
+
+    <!-- 网络位置 -->
+    ${data.network_locations?.length ? `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>📍 网络位置</h2>
+        <span class="badge">${data.network_locations.length} 个</span>
+      </div>
+      <div class="panel-body">
+        <div class="chip-list">
+          ${data.network_locations.map(l => `<span class="chip">${escapeHtml(l)}</span>`).join('')}
+        </div>
+      </div>
+    </div>` : ''}
+
+  `;
+
+  // 更新时间戳
+  if (data.timestamp) {
+    document.getElementById('lastUpdate').textContent = data.timestamp;
+  }
+}
+
+function renderWiFiSection(wifi) {
+  if (!wifi || !wifi.is_connected) {
+    return '<div class="empty">未连接到 WiFi 网络<br><span style="font-size:11px">当前可能使用有线或 VPN 连接</span></div>';
+  }
+
+  const q = rssiQuality(wifi.rssi);
+  const pct = rssiPercentage(wifi.rssi);
+
+  return `
+    <div class="wifi-grid">
+      <div class="wifi-item">
+        <div class="label">SSID</div>
+        <div class="value">${escapeHtml(wifi.ssid)}</div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">BSSID</div>
+        <div class="value">${escapeHtml(wifi.bssid)}</div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">信号强度</div>
+        <div class="value" style="color:var(--${q.cls === 'bad' ? 'red' : q.cls === 'poor' ? 'orange' : q.cls === 'good' ? 'accent' : 'green'})">${wifi.rssi} dBm <span style="font-size:11px">${q.text}</span></div>
+        <div class="rssi-bar-wrap"><div class="rssi-bar ${q.cls}" style="width:${pct}%"></div></div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">信道</div>
+        <div class="value">${wifi.channel} <span style="font-size:11px">${wifi.channel_band || ''}</span></div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">信道宽度</div>
+        <div class="value">${wifi.channel_width || 'N/A'}</div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">PHY 模式</div>
+        <div class="value">${escapeHtml(wifi.phy_mode)}</div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">传输速率</div>
+        <div class="value">${wifi.transmit_rate ? wifi.transmit_rate + ' Mbps' : 'N/A'}</div>
+      </div>
+      <div class="wifi-item">
+        <div class="label">安全类型</div>
+        <div class="value">${escapeHtml(wifi.security)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPrimaryRoute(routing) {
+  if (!routing) return '';
+  return `
+    <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)">
+      <div class="info-row">
+        <span class="key">默认网关</span>
+        <span class="val" style="font-family:monospace">${routing.default_gateway || 'N/A'}</span>
+      </div>
+      <div class="info-row">
+        <span class="key">出口接口</span>
+        <span class="val">${escapeHtml(routing.default_interface || 'N/A')}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderInterfacesTable(ifaces, primary) {
+  if (!ifaces || !ifaces.length) return '<div class="empty">未检测到网络接口</div>';
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>接口</th>
+            <th>显示名称</th>
+            <th>类型</th>
+            <th>状态</th>
+            <th>IPv4</th>
+            <th>MAC</th>
+            <th>MTU</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${ifaces
+            .filter(i => i.status === 'active' || i.hardware_type !== '其他')
+            .map(i => `
+            <tr style="${i.is_primary ? 'background:rgba(175,82,222,0.06)' : ''}">
+              <td style="font-family:monospace;font-weight:600">${i.is_primary ? '⭐ ' : ''}${escapeHtml(i.name)}</td>
+              <td>${escapeHtml(i.display_name)}</td>
+              <td>${escapeHtml(i.hardware_type)}</td>
+              <td><span class="tag ${i.status === 'active' ? 'active' : 'inactive'}">${i.status === 'active' ? '活跃' : '非活跃'}</span></td>
+              <td style="font-family:monospace;color:var(--accent)">${i.ipv4_addresses.join(', ') || '-'}</td>
+              <td style="font-family:monospace;font-size:11px">${i.mac_address || '-'}</td>
+              <td>${i.mtu || '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDnsSection(dns) {
+  if (!dns) return '<div class="empty">无 DNS 数据</div>';
+  return `
+    <div class="chip-list" style="margin-bottom:12px">
+      ${dns.servers?.map(s => `<span class="chip">${escapeHtml(s)}</span>`).join('') || '<span class="empty">无 DNS 服务器</span>'}
+    </div>
+    ${dns.search_domains?.length ? `
+    <div style="font-size:12px;color:var(--text-muted)">搜索域: ${dns.search_domains.map(escapeHtml).join(', ')}</div>
+    ` : ''}
+  `;
+}
+
+function hasProxy(proxy) {
+  if (!proxy) return false;
+  return proxy.http_enabled || proxy.https_enabled || proxy.socks_enabled || proxy.ftp_enabled;
+}
+
+function renderProxySection(proxy) {
+  if (!proxy) return '<div class="empty">无代理数据</div>';
+  if (!hasProxy(proxy)) return '<div class="empty">未配置代理</div>';
+
+  return `
+    ${proxy.http_enabled ? `<div class="info-row"><span class="key">HTTP 代理</span><span class="val enabled">${escapeHtml(proxy.http_server)}:${proxy.http_port}</span></div>` : ''}
+    ${proxy.https_enabled ? `<div class="info-row"><span class="key">HTTPS 代理</span><span class="val enabled">${escapeHtml(proxy.https_server)}:${proxy.https_port}</span></div>` : ''}
+    ${proxy.socks_enabled ? `<div class="info-row"><span class="key">SOCKS 代理</span><span class="val enabled">${escapeHtml(proxy.socks_server)}:${proxy.socks_port}</span></div>` : ''}
+    ${proxy.ftp_enabled ? `<div class="info-row"><span class="key">FTP 代理</span><span class="val enabled">${escapeHtml(proxy.ftp_server)}:${proxy.ftp_port}</span></div>` : ''}
+    ${proxy.auto_discovery ? `<div class="info-row"><span class="key">自动发现</span><span class="val enabled">已启用</span></div>` : ''}
+    ${proxy.auto_config_url ? `<div class="info-row"><span class="key">PAC 地址</span><span class="val" style="font-size:11px;word-break:break-all">${escapeHtml(proxy.auto_config_url)}</span></div>` : ''}
+    ${proxy.exceptions_list?.length ? `<div class="info-row"><span class="key">例外列表</span><span class="val" style="font-size:11px">${proxy.exceptions_list.map(escapeHtml).join(', ')}</span></div>` : ''}
+  `;
+}
+
+function renderFirewallSection(fw) {
+  if (!fw) return '<div class="empty">无法获取防火墙状态</div>';
+  if (!fw.enabled) return '<div class="empty">防火墙未启用</div>';
+
+  return `
+    <div class="info-row"><span class="key">状态</span><span class="val enabled">已启用</span></div>
+    <div class="info-row"><span class="key">阻止所有传入连接</span><span class="val ${fw.block_all ? 'enabled' : 'disabled'}">${fw.block_all ? '是' : '否'}</span></div>
+    <div class="info-row"><span class="key">允许已签名应用</span><span class="val ${fw.allow_signed ? 'enabled' : 'disabled'}">${fw.allow_signed ? '是' : '否'}</span></div>
+    <div class="info-row"><span class="key">隐身模式</span><span class="val ${fw.stealth_mode ? 'enabled' : 'disabled'}">${fw.stealth_mode ? '已启用' : '未启用'}</span></div>
+    ${fw.logging_enabled ? `<div class="info-row"><span class="key">日志记录</span><span class="val enabled">已启用</span></div>` : ''}
+    ${fw.apps_allowed?.length ? `
+      <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">允许的应用 (${fw.apps_allowed.length}):</div>
+      ${fw.apps_allowed.slice(0, 5).map(a => `<div style="font-size:11px;padding:2px 0;color:var(--text-secondary)">${escapeHtml(a.split('/').pop())}</div>`).join('')}
+      ${fw.apps_allowed.length > 5 ? `<div style="font-size:10px;color:var(--text-muted)">... 及其他 ${fw.apps_allowed.length - 5} 个</div>` : ''}
+    ` : ''}
+  `;
+}
+
+function renderRouteSection(routing) {
+  if (!routing || !routing.routes?.length) return '<div class="empty">无路由数据</div>';
+
+  return `
+    <div style="margin-bottom:8px">
+      <div class="info-row"><span class="key">默认网关</span><span class="val" style="font-family:monospace">${routing.default_gateway || 'N/A'}</span></div>
+      <div class="info-row"><span class="key">出口接口</span><span class="val">${escapeHtml(routing.default_interface || 'N/A')}</span></div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin:12px 0 4px">路由表 (前 ${routing.routes.length} 条):</div>
+    ${routing.routes.slice(0, 15).map(r => `
+      <div class="route-entry">
+        <span class="route-dest">${escapeHtml(r.destination)}</span>
+        <span class="route-gw">→ ${escapeHtml(r.gateway)}</span>
+        <span class="route-flags">${escapeHtml(r.flags)}</span>
+        <span class="route-iface">${escapeHtml(r.interface)}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function renderSavedWiFi(networks) {
+  if (!networks || !networks.length) {
+    return '<div class="empty">未找到已保存的 WiFi 网络<br><span style="font-size:11px">可能需要授权访问系统偏好设置</span></div>';
+  }
+
+  return `
+    <div class="wifi-list">
+      ${networks.map(n => `
+        <div class="wifi-chip">
+          <span>📶</span>
+          <span>${escapeHtml(n.ssid)}</span>
+          <span class="sec">${escapeHtml(n.security_type || '')}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderVpnSection(vpns) {
+  if (!vpns || !vpns.length) return '<div class="empty">未检测到 VPN 配置</div>';
+
+  return vpns.map(v => `
+    <div class="info-row">
+      <span class="key">${escapeHtml(v.name)}</span>
+      <span class="val ${v.status === 'connected' ? 'enabled' : 'disabled'}">${v.status === 'connected' ? '已连接' : v.status === 'disconnected' ? '未连接' : '已配置'}</span>
+    </div>
+  `).join('');
+}
+
+function renderConnectionStats(summary) {
+  if (!summary) return '<div class="empty">无连接统计数据</div>';
+
+  return `
+    <div class="conn-stats">
+      <div class="conn-stat">
+        <div class="num" style="color:var(--accent)">${summary.total_active}</div>
+        <div class="lbl">总活跃连接</div>
+      </div>
+      <div class="conn-stat">
+        <div class="num" style="color:var(--green)">${summary.tcp_active}</div>
+        <div class="lbl">TCP</div>
+      </div>
+      <div class="conn-stat">
+        <div class="num" style="color:var(--purple)">${summary.udp_active}</div>
+        <div class="lbl">UDP</div>
+      </div>
+      <div class="conn-stat">
+        <div class="num" style="color:var(--orange)">${summary.established}</div>
+        <div class="lbl">已建立连接</div>
+      </div>
+      <div class="conn-stat">
+        <div class="num" style="color:var(--yellow)">${summary.listening}</div>
+        <div class="lbl">监听端口</div>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════
+// 数据获取与刷新
+// ═══════════════════════════════════════════════
+
+async function refresh() {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className = 'status-dot loading';
+  text.textContent = '检测中...';
+
+  try {
+    const resp = await fetch('/api/report');
+    const result = await resp.json();
+
+    if (result.ok) {
+      dot.className = result.data.internet_connected ? 'status-dot online' : 'status-dot offline';
+      text.textContent = result.data.internet_connected ? '网络正常' : '网络异常';
+      renderApp(result.data);
+    } else {
+      dot.className = 'status-dot offline';
+      text.textContent = '检测失败';
+      document.getElementById('app').innerHTML = `<div class="error-toast">⚠️ 数据采集失败: ${escapeHtml(result.error)}</div>`;
+    }
+  } catch (e) {
+    dot.className = 'status-dot offline';
+    text.textContent = '连接失败';
+    document.getElementById('app').innerHTML = `<div class="error-toast">⚠️ 无法连接到检测服务: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+// 启动
+refresh();
+</script>
+
+</body>
+</html>

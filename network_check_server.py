@@ -218,20 +218,74 @@ def step_ip_whois(ips):
 
 
 def step_traceroute(target_ip):
-    """使用 traceroute 追踪到目标 IP 的逐跳路由"""
-    result = {"hops": [], "error": None, "target": target_ip}
-    # 尝试 traceroute，沙箱内可能因权限失败
+    """追踪到目标 IP 的逐跳路由。优先用 traceroute，失败则用 ping -m TTL 回退"""
+    result = {"hops": [], "error": None, "target": target_ip, "method": "traceroute"}
+
+    # 方案 1: 尝试系统 traceroute
     out, err, rc = run_cmd(
         f"traceroute -n -m 15 -q 1 -w 2 '{target_ip}' 2>&1",
         timeout=30,
     )
-    if rc != 0 or "Operation not permitted" in out or "not permitted" in err:
-        result["error"] = "需要管理员权限才能追踪路由跳转（沙箱限制）"
-        # 回退：用 route -n get 获取出口信息
-        out2, _, _ = run_cmd(f"route -n get '{target_ip}' 2>/dev/null", timeout=5)
+    if rc == 0 and "not permitted" not in out and "not permitted" not in err:
+        for line in out.split("\n"):
+            line = line.strip()
+            if not line or "traceroute" in line.lower():
+                continue
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    hop = int(parts[0])
+                except ValueError:
+                    continue
+                ip = parts[1]
+                rtt = None
+                for p in parts[2:]:
+                    p = p.replace("ms", "")
+                    try:
+                        rtt = float(p)
+                        break
+                    except ValueError:
+                        continue
+                result["hops"].append({
+                    "hop": hop,
+                    "ip": ip if ip != "*" else None,
+                    "rtt": rtt,
+                    "timeout": ip == "*",
+                })
+        if result["hops"]:
+            return result
+
+    # 方案 2: ping -m TTL 逐跳探测（不需要特殊权限）
+    result["method"] = "ping-ttl"
+    for ttl in range(1, 16):
+        out2, _, _ = run_cmd(
+            f"ping -c 1 -m {ttl} -t 2 '{target_ip}' 2>&1",
+            timeout=5,
+        )
+        if "Time to live exceeded" in out2:
+            # 提取中间路由器 IP
+            m = re.search(r"from\s+(\d+\.\d+\.\d+\.\d+)", out2)
+            ip = m.group(1) if m else None
+            rtt_m = re.search(r"time=([\d.]+)\s*ms", out2)
+            rtt = float(rtt_m.group(1)) if rtt_m else None
+            result["hops"].append({"hop": ttl, "ip": ip, "rtt": rtt, "timeout": False})
+        elif "packets received" in out2 and "0 packets received" not in out2:
+            # 到达目标
+            rtt_m = re.search(r"time=([\d.]+)\s*ms", out2)
+            rtt = float(rtt_m.group(1)) if rtt_m else None
+            result["hops"].append({"hop": ttl, "ip": target_ip, "rtt": rtt, "timeout": False, "reached": True})
+            break
+        else:
+            # 超时，无响应
+            result["hops"].append({"hop": ttl, "ip": None, "rtt": None, "timeout": True})
+
+    if not result["hops"]:
+        result["error"] = "无法追踪路由路径"
+        # 最终回退：route -n get
+        out3, _, _ = run_cmd(f"route -n get '{target_ip}' 2>/dev/null", timeout=5)
         route_info = {"interface": None, "gateway": None, "is_tunnel": False}
-        if out2:
-            for line in out2.split("\n"):
+        if out3:
+            for line in out3.split("\n"):
                 if line.strip().startswith("interface:"):
                     iface = line.split(":", 1)[-1].strip()
                     route_info["interface"] = iface
@@ -240,37 +294,7 @@ def step_traceroute(target_ip):
                 elif line.strip().startswith("gateway:"):
                     route_info["gateway"] = line.split(":", 1)[-1].strip()
         result["route_fallback"] = route_info
-        return result
 
-    # 解析 traceroute 输出
-    # 格式: 1  192.168.1.1  2.123 ms
-    for line in out.split("\n"):
-        line = line.strip()
-        if not line or "traceroute" in line.lower():
-            continue
-        # 提取跳数和 IP
-        parts = line.split()
-        if len(parts) >= 2:
-            try:
-                hop = int(parts[0])
-            except ValueError:
-                continue
-            ip = parts[1]
-            rtt = None
-            # 提取 RTT
-            for p in parts[2:]:
-                p = p.replace("ms", "")
-                try:
-                    rtt = float(p)
-                    break
-                except ValueError:
-                    continue
-            result["hops"].append({
-                "hop": hop,
-                "ip": ip if ip != "*" else None,
-                "rtt": rtt,
-                "timeout": ip == "*",
-            })
     return result
 
 
