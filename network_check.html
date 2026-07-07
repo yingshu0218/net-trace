@@ -192,7 +192,21 @@ function initNetwork() {
   const container = document.getElementById('topology');
   const data = { nodes: new vis.DataSet(), edges: new vis.DataSet() };
   const options = {
-    physics: { enabled: false },
+    // 彻底禁用所有物理模拟——零速度、零力、不稳定化
+    physics: {
+      enabled: false,
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: {
+        gravitationalConstant: 0,
+        centralGravity: 0,
+        springLength: 0,
+        springConstant: 0,
+        damping: 1,
+      },
+      stabilization: { enabled: false, iterations: 0 },
+      maxVelocity: 0,
+      minVelocity: 0,
+    },
     layout: {
       hierarchical: {
         enabled: true,
@@ -204,7 +218,8 @@ function initNetwork() {
       },
     },
     edges: {
-      smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.3 },
+      // 去掉 bezier 曲线——直线不会产生视觉抖动
+      smooth: false,
       font: { size: 10, color: '#8b8fa3', strokeWidth: 0 },
       arrows: { to: { enabled: true, scaleFactor: 0.5 } },
       color: { color: '#3a3d4a', hover: '#5b8def' },
@@ -212,11 +227,15 @@ function initNetwork() {
     nodes: {
       shape: 'dot', size: 16,
       font: { size: 12, color: '#e1e4eb', face: '-apple-system, BlinkMacSystemFont, sans-serif' },
-      borderWidth: 2, shadow: { enabled: true, size: 4 },
+      borderWidth: 2,
+      // 去掉阴影——减少 canvas 重绘开销
+      shadow: { enabled: false },
     },
-    interaction: { hover: true },
+    interaction: { hover: true, dragNodes: false },
   };
   network = new vis.Network(container, data, options);
+  // 二次保障：初始化后强制关闭物理
+  network.setOptions({ physics: false });
 }
 
 const NODE_COLORS = {
