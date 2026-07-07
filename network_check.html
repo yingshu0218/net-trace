@@ -45,9 +45,11 @@
 
   /* ---- left: topology ---- */
   .topo-panel {
-    flex: 1; background: var(--card-bg); margin: 10px;
+    width: calc(100% - 480px);
+    background: var(--card-bg); margin: 10px;
     border-radius: 12px; border: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden;
+    flex-shrink: 0;
   }
   #topology { flex: 1; }
   .empty-hint {
@@ -542,8 +544,12 @@ function startCheck() {
   es.addEventListener('done', function(e) {
     const { domain: d } = JSON.parse(e.data);
 
-    // 最终 fit 一次拓扑
-    if (network) network.fit();
+    // 锁定拓扑图：fit 后存储坐标 + 二次禁用物理
+    if (network) {
+      network.fit();
+      network.setOptions({ physics: false });
+      network.storePositions();
+    }
 
     // 显示完整汇总（追加到详情底部）
     let html = detailAccum.map(x => x.block).join('');
@@ -574,8 +580,7 @@ document.getElementById('domainInput').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') startCheck();
 });
 
-// 初始化拓扑
-initNetwork();
+// 页面加载时不创建拓扑图，等待用户点击"开始检测"
 </script>
 </body>
 </html>
