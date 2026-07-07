@@ -251,15 +251,11 @@ function addTopoNodes(nodeList) {
     };
   });
   network.body.data.nodes.add(nodes);
-  // 触发层次布局静默重算
-  network.stabilize(0);
 }
 
 function addTopoEdges(edgeList) {
   if (!network || !edgeList.length) return;
   network.body.data.edges.add(edgeList);
-  // 触发层次布局重算，但不做 fit 避免视口跳动
-  network.stabilize(0);
 }
 
 // ======== progress UI ========
@@ -528,7 +524,7 @@ function startCheck() {
     const { domain: d } = JSON.parse(e.data);
 
     // 最终 fit 一次拓扑
-    if (network) network.fit({ animation: { duration: 500 } });
+    if (network) network.fit();
 
     // 显示完整汇总（追加到详情底部）
     let html = detailAccum.map(x => x.block).join('');
